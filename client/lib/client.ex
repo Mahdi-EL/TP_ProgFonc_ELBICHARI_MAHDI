@@ -91,8 +91,7 @@ end
       {:error, _} -> IO.puts("Erreur de réception")
     end
   end
-end
-defp valider_message(msg) do
+  defp valider_message(msg) do
   cond do
     msg == "" ->
       {:error, "Message vide"}
@@ -106,4 +105,5 @@ defp valider_message(msg) do
     true ->
       {:ok, msg}
   end
+end
 end
