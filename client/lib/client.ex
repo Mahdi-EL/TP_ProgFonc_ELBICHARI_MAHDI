@@ -1,109 +1,54 @@
 defmodule MiniDiscord.Client do
 
-  @doc"""
-  Point d'entrée principal du client.
-  host : nom type 'xxxbore.pub'
-  port : entier ex: 4040
-  """
- def start(host, port) do
-  connect_with_retry(host, port, 1)
-end
-defp connect_with_retry(host, port, attempt) do
-  case :gen_tcp.connect(String.to_charlist(host), port,
-         [:binary, packet: :line, active: false]) do
+   def start(host, port) do
+     pseudo = IO.gets("Ton pseudo : ") |> String.trim()
+     salon  = IO.gets("Salon à rejoindre : ") |> String.trim()
+     connect_with_retry(host, port, pseudo, salon, 1)
+   end
 
-    {:ok, socket} ->
-      IO.puts("✅ Connecté au serveur #{host}:#{port}")
-
-      rencontre(socket)
-
-      IO.puts("💬 Tu peux envoyer des messages :")
-
-      receiver = Task.async(fn -> receive_loop(socket, host, port) end)
+   defp connect_with_retry(host, port, pseudo, salon, attempt) do
+     case :gen_tcp.connect(String.to_charlist(host), port,
+         [:binary, packet: 0, active: false]) do
+     {:ok, socket} ->
+      IO.puts("✅ Connecté à #{host}:#{port}")
+      handshake(socket, pseudo, salon)
+      receiver = Task.async(fn -> receive_loop(socket, host, port, pseudo, salon) end)
       sender   = Task.async(fn -> send_loop(socket) end)
-
       Task.await(receiver, :infinity)
       Task.await(sender, :infinity)
 
     {:error, reason} ->
-      IO.puts("❌ Tentative #{attempt} échouée : #{inspect(reason)}")
+      IO.puts("⚠️ Tentative #{attempt} échouée : #{inspect(reason)}")
       :timer.sleep(2000)
-      connect_with_retry(host, port, attempt + 1)
+      connect_with_retry(host, port, pseudo, salon, attempt + 1)
+    end
+   end
+
+  defp handshake(socket, pseudo, salon) do
+    # Vider les messages du serveur
+    :gen_tcp.recv(socket, 0, 500)
+    :gen_tcp.send(socket, pseudo <> "\r\n")
+    :gen_tcp.recv(socket, 0, 500)
+    :gen_tcp.send(socket, salon <> "\r\n")
+    :gen_tcp.recv(socket, 0, 500)
   end
-end
 
-  # Échange initial : pseudo et salon
-  defp rencontre(socket) do
-  # Lire message de bienvenue
-  recv_print(socket)
-
-  # 👉 demander directement le pseudo
-  pseudo = IO.gets("Pseudo: ") |> String.trim()
-  :gen_tcp.send(socket, pseudo <> "\r\n")
-
-  # Lire réponse serveur (liste salons)
-  recv_print(socket)
-
-  # Choisir salon
-  salon = IO.gets("Salon: ") |> String.trim()
-  :gen_tcp.send(socket, salon <> "\r\n")
-
-  # Lire confirmation
-  recv_print(socket)
-end
-
-  # Boucle de réception — affiche les messages du serveur
-  defp receive_loop(socket, host, port) do
+  defp receive_loop(socket, host, port, pseudo, salon) do
   case :gen_tcp.recv(socket, 0) do
     {:ok, msg} ->
       IO.write(msg)
-      receive_loop(socket, host, port)
+      receive_loop(socket, host, port, pseudo, salon)
 
     {:error, reason} ->
       IO.puts("\n🔌 Connexion perdue (#{inspect(reason)}). Reconnexion...")
       :gen_tcp.close(socket)
-      connect_with_retry(host, port, 1)
+      connect_with_retry(host, port, pseudo, salon, 1)
+   end
   end
-end
 
-  # Boucle d'envoi — lit le clavier et envoie au serveur
   defp send_loop(socket) do
-  case IO.gets("> ") do
-    nil ->
-      IO.puts("Fin du client")
-      :gen_tcp.close(socket)
-
-    msg ->
-      msg = String.trim(msg)
-
-      if msg != "" do
-        :gen_tcp.send(socket, msg <> "\r\n")
-      end
-
-      send_loop(socket)
+    msg = IO.gets("") |> String.trim()
+    :gen_tcp.send(socket, msg <> "\r\n")
+    send_loop(socket)
   end
-end
-
-  # Helper — reçoit et affiche un message
-  defp recv_print(socket) do
-    case :gen_tcp.recv(socket, 0) do
-      {:ok, msg} -> IO.write(msg)
-      {:error, _} -> IO.puts("Erreur de réception")
-    end
-  end
-  defp valider_message(msg) do
-  cond do
-    msg == "" ->
-      {:error, "Message vide"}
-
-    String.length(msg) > 500 ->
-      {:error, "Message trop long (max 500 caractères)"}
-
-    String.match?(msg, ~r/[<>\\]/) ->
-      {:error, "Caractères interdits"}
-
-    true ->
-      {:ok, msg}
-  end
-end
 end
