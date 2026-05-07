@@ -28,3 +28,9 @@ Si on utilisait OTP (GenServer + Supervisor) côté client :
 - **Tolérance aux pannes complète** : notre code actuel ne gère 
   que la déconnexion réseau. Avec OTP, tout type de crash serait 
   géré automatiquement.
+
+
+
+
+
+  2.5 je me suis arrete dans cette qsts vue que lorsque j ai implementé la fonction crypter et décrypter j ai un pb d'affichage du msg vue qu il soit non crypter mais je vais régler ce pb ce soir ou demain matin merci pour votre comprehension
