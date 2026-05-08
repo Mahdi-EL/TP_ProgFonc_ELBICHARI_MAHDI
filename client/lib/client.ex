@@ -1,7 +1,5 @@
 defmodule MiniDiscord.Client do
 
-  @cle "miniDiscordKey2025_SecretKey32!!"
-
   def start(host, port) do
     pseudo = IO.gets("Ton pseudo : ") |> String.trim()
     salon  = IO.gets("Salon à rejoindre : ") |> String.trim()
@@ -34,13 +32,11 @@ defmodule MiniDiscord.Client do
     :gen_tcp.recv(socket, 0, 500)
   end
 
-  # Affiche les messages reçus normalement
   defp receive_loop(socket, host, port, pseudo, salon) do
     case :gen_tcp.recv(socket, 0) do
       {:ok, msg} ->
         IO.write(msg)
         receive_loop(socket, host, port, pseudo, salon)
-
       {:error, reason} ->
         IO.puts("\n🔌 Connexion perdue (#{inspect(reason)}). Reconnexion...")
         :gen_tcp.close(socket)
@@ -48,14 +44,11 @@ defmodule MiniDiscord.Client do
     end
   end
 
-  # Chiffre les messages avant de les envoyer (TP section 2.5)
   defp send_loop(socket) do
     msg = IO.gets("") |> String.trim()
     case valider_message(msg) do
       {:ok, msg_valide} ->
-        iv = :crypto.strong_rand_bytes(16)
-        msg_c = :crypto.crypto_one_time(:aes_256_ctr, @cle, iv, msg_valide, true)
-        :gen_tcp.send(socket, iv <> msg_c)
+        :gen_tcp.send(socket, msg_valide <> "\r\n")
       {:error, raison} ->
         IO.puts("❌ #{raison}")
     end
