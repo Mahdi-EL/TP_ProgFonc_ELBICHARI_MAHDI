@@ -1,6 +1,7 @@
 defmodule MiniDiscord.ClientHandler do
   require Logger
- 
+ @cle "miniDiscordKey2025_SecretKey32!!"
+
   # ─────────────────────────────────────────────
   # Point d'entrée
   # ─────────────────────────────────────────────
@@ -127,6 +128,15 @@ defmodule MiniDiscord.ClientHandler do
   # ─────────────────────────────────────────────
   # Boucle principale
   # ─────────────────────────────────────────────
+    defp dechiffrer(data) do
+      try do
+        decoded = Base.decode64!(String.trim(data))
+        <<iv::binary-size(16), msg_chiffre::binary>> = decoded
+        :crypto.crypto_one_time(:aes_256_ctr, @cle, iv, msg_chiffre, false)
+      rescue
+        _ -> data
+      end
+    end
  
   defp loop(socket, pseudo, salon) do
     receive do
@@ -136,7 +146,7 @@ defmodule MiniDiscord.ClientHandler do
  
     case :gen_tcp.recv(socket, 0, 100) do
       {:ok, raw} ->
-        msg = String.trim(raw)
+        msg = dechiffrer(raw) |> String.trim()
         if String.starts_with?(msg, "/") do
           gerer_commande(socket, pseudo, salon, msg)
         else
