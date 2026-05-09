@@ -1,5 +1,7 @@
 defmodule MiniDiscord.Client do
 
+  @cle "miniDiscordKey2025_SecretKey32!!"
+
   def start(host, port) do
     pseudo = IO.gets("Ton pseudo : ") |> String.trim()
     salon  = IO.gets("Salon à rejoindre : ") |> String.trim()
@@ -24,18 +26,52 @@ defmodule MiniDiscord.Client do
     end
   end
 
-    defp handshake(socket, pseudo, salon) do
-      # Consommer bienvenue + prompt pseudo
-      :gen_tcp.recv(socket, 0, 500)
-      # Envoyer pseudo
-      :gen_tcp.send(socket, pseudo <> "\r\n")
-      # Consommer liste salons + prompt salon
-      :gen_tcp.recv(socket, 0, 500)
-      # Envoyer salon
-      :gen_tcp.send(socket, salon <> "\r\n")
-      # Gérer les messages jusqu'à "Tu es dans"
-      attendre_entree(socket)
+  defp handshake(socket, pseudo, salon) do
+  # Bienvenue — ignoré
+    :gen_tcp.recv(socket, 0, 500)
+  # Envoyer pseudo
+    :gen_tcp.send(socket, pseudo <> "\r\n")
+  # Afficher la liste des salons avec 🔒/🔓
+    case :gen_tcp.recv(socket, 0, 500) do
+      {:ok, msg} -> IO.write(msg)
+      _ -> :ok
     end
+  # Envoyer le salon choisi
+    :gen_tcp.send(socket, salon <> "\r\n")
+  # Gérer les messages suivants
+    attendre_entree(socket)
+  end
+
+  defp attendre_entree(socket) do
+    case :gen_tcp.recv(socket, 0, 1000) do
+      {:ok, msg} ->
+        IO.write(msg)
+        cond do
+          String.contains?(msg, "oui/non") ->
+            choix = IO.gets("") |> String.trim()
+            :gen_tcp.send(socket, choix <> "\r\n")
+            attendre_entree(socket)
+
+          String.contains?(msg, "Choisis un mot de passe") ->
+            mdp = IO.gets("") |> String.trim()
+            :gen_tcp.send(socket, mdp <> "\r\n")
+            attendre_entree(socket)
+
+          String.contains?(msg, "protégé") ->
+            mdp = IO.gets("") |> String.trim()
+            :gen_tcp.send(socket, mdp <> "\r\n")
+            attendre_entree(socket)
+
+          String.contains?(msg, "Tu es dans") ->
+            :ok
+
+          true ->
+            attendre_entree(socket)
+        end
+
+      {:error, _} -> :ok
+    end
+  end
 
   defp receive_loop(socket, host, port, pseudo, salon) do
     case :gen_tcp.recv(socket, 0) do
@@ -49,21 +85,19 @@ defmodule MiniDiscord.Client do
     end
   end
 
-  @cle "miniDiscordKey2025_SecretKey32!!"
-
-    defp send_loop(socket) do
-      msg = IO.gets("") |> String.trim()
-      case valider_message(msg) do
-        {:ok, msg_valide} ->
-          iv = :crypto.strong_rand_bytes(16)
-          msg_c = :crypto.crypto_one_time(:aes_256_ctr, @cle, iv, msg_valide, true)
-          encoded = Base.encode64(iv <> msg_c)
-          :gen_tcp.send(socket, encoded <> "\r\n")
-        {:error, raison} ->
-          IO.puts("❌ #{raison}")
-      end
-      send_loop(socket)
+  defp send_loop(socket) do
+    msg = IO.gets("") |> String.trim()
+    case valider_message(msg) do
+      {:ok, msg_valide} ->
+        iv = :crypto.strong_rand_bytes(16)
+        msg_c = :crypto.crypto_one_time(:aes_256_ctr, @cle, iv, msg_valide, true)
+        encoded = Base.encode64(iv <> msg_c)
+        :gen_tcp.send(socket, encoded <> "\r\n")
+      {:error, raison} ->
+        IO.puts("❌ #{raison}")
     end
+    send_loop(socket)
+  end
 
   defp valider_message(msg) do
     cond do
@@ -76,24 +110,6 @@ defmodule MiniDiscord.Client do
       true ->
         {:ok, msg}
     end
-  end
-  defp attendre_entree(socket) do
-  case :gen_tcp.recv(socket, 0, 1000) do
-    {:ok, msg} ->
-      IO.write(msg)
-      cond do
-        # Salon créé → répondre "non" au mot de passe
-        String.contains?(msg, "mot de passe") ->
-          :gen_tcp.send(socket, "non\r\n")
-          attendre_entree(socket)
-        # On est dans le salon → handshake terminé
-        String.contains?(msg, "Tu es dans") ->
-          :ok
-        true ->
-          attendre_entree(socket)
-      end
-    {:error, _} -> :ok
-    end 
   end
 
 end

@@ -146,7 +146,9 @@ defmodule MiniDiscord.ClientHandler do
  
     case :gen_tcp.recv(socket, 0, 100) do
       {:ok, raw} ->
+        IO.puts("🔐 Reçu chiffré : #{Base.encode64(raw)}")
         msg = dechiffrer(raw) |> String.trim()
+        IO.puts("🔓 Déchiffré : #{msg}")
         if String.starts_with?(msg, "/") do
           gerer_commande(socket, pseudo, salon, msg)
         else
