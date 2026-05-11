@@ -8,48 +8,26 @@
 ## Arborescence du projet
 
 ```
-TP_ProgFonc_ELBICHARI_MAHDI/
-├── server/                      ← Serveur MiniDiscord (TP partie 1)
-│   ├── lib/
-│   │   ├── chat_server.ex
-│   │   ├── client_handler.ex
-│   │   ├── mini_discord.ex
-│   │   └── salon.ex
-│   └── mix.exs
-├── client/                      ← Client MiniDiscord (TP partie 2)
-│   ├── lib/
-│   │   └── client.ex
-│   └── mix.exs
-└── README.md
+client/
+├── lib/
+│   └── client.ex
+├── test/
+└── mix.exs
 ```
 
 ---
 
-## Initialisation
-
-### Renommer le projet serveur et créer le client
+## Installation et lancement
 
 ```bash
-# Renommer l'ancien projet en server
-mv mon_projet server
+# Compiler
+mix compile
 
-# Créer le projet client
-mix new client
-cd client
-```
-
-### Lancer le serveur
-
-```bash
-cd server
+# Lancer
 iex -S mix
 ```
 
-### Lancer le client
-
-```bash
-cd client
-iex -S mix
+```elixir
 MiniDiscord.Client.start("localhost", 4040)
 ```
 
@@ -66,23 +44,19 @@ Avant d'implémenter le client complet, vérification manuelle dans iex :
 
 # Lire le message de bienvenue
 :gen_tcp.recv(socket, 0)
-# => {:ok, "Bienvenue sur MiniDiscord!\r\n"}
 
 # Envoyer un pseudo
 :gen_tcp.send(socket, "alice\r\n")
 
 # Lire la suite
 :gen_tcp.recv(socket, 0)
-# => {:ok, "📋 Salons disponibles : ..."}
 ```
 
 > **Remarque :** chaque ligne envoyée doit se terminer par `"\r\n"`
 
 ---
 
-## 1. Client — `client/lib/client.ex`
-
-### Code complet
+## 1. Client — Code complet
 
 ```elixir
 defmodule MiniDiscord.Client do
@@ -192,23 +166,15 @@ defmodule MiniDiscord.Client do
 end
 ```
 
-### Explication des fonctions
+### Test — Connexion réussie
 
-| Fonction | Rôle |
-|---|---|
-| `start/2` | Point d'entrée — demande pseudo/salon et lance la connexion |
-| `connect_with_retry/5` | Connexion TCP avec retry automatique |
-| `handshake/3` | Échange initial pseudo/salon avec le serveur |
-| `attendre_entree/1` | Gère les messages du serveur pendant le setup |
-| `receive_loop/5` | Reçoit et affiche les messages en continu |
-| `send_loop/1` | Lit le clavier, valide et envoie les messages chiffrés |
-| `valider_message/1` | Filtre les messages invalides |
+![Capture 1 - Connexion client](screenshots/capture_1.png)
 
 ---
 
 ## 2.1 Reconnexion automatique
 
-En cas d'échec de connexion, le client retente automatiquement toutes les 2 secondes :
+En cas d'échec de connexion, le client retente automatiquement toutes les **2 secondes** :
 
 ```elixir
 defp connect_with_retry(host, port, pseudo, salon, attempt) do
@@ -222,25 +188,11 @@ defp connect_with_retry(host, port, pseudo, salon, attempt) do
 end
 ```
 
-### Test
-
-```elixir
-# Dans iex du serveur — tuer le ChatServer
-Process.whereis(MiniDiscord.ChatServer) |> Process.exit(:kill)
-```
-
-Le client affiche :
-```
-⚠️ Tentative 1 échouée : :econnrefused
-⚠️ Tentative 2 échouée : :econnrefused
-✅ Connecté à localhost:4040  ← reconnexion automatique !
-```
-
 ---
 
 ## 2.2 Reconnexion depuis la réception de message
 
-Quand la connexion est perdue pendant une session, `receive_loop` détecte l'erreur et relance la connexion :
+Quand la connexion est perdue pendant une session, `receive_loop` détecte l'erreur et relance :
 
 ```elixir
 defp receive_loop(socket, host, port, pseudo, salon) do
@@ -256,18 +208,14 @@ defp receive_loop(socket, host, port, pseudo, salon) do
 end
 ```
 
-### Test
+### Test — Kill du serveur et reconnexion automatique
 
-```elixir
-# Tuer le ChatServer pendant qu'un client est connecté
-Process.whereis(MiniDiscord.ChatServer) |> Process.exit(:kill)
-```
+![Capture 3 - Reconnexion](screenshots/capture_3.png)
 
-Le client affiche :
-```
-🔌 Connexion perdue (:closed). Reconnexion...
-✅ Connecté à localhost:4040
-```
+**Ce qui est prouvé :**
+- Serveur tué avec `Process.exit(:kill)` → `true`
+- Serveur redémarre : `🚀 Serveur démarré sur le port 4040`
+- Client détecte la déconnexion et se reconnecte automatiquement ✅
 
 ---
 
@@ -283,12 +231,11 @@ Cette approche fonctionne mais reste limitée.
 Si on utilisait OTP (GenServer + Supervisor) côté client :
 
 - **Redémarrage automatique** : si le processus client plante pour
-  n'importe quelle raison (pas seulement une déconnexion réseau),
-  le Supervisor le relancerait automatiquement sans intervention manuelle.
+  n'importe quelle raison, le Supervisor le relancerait automatiquement.
 
 - **Gestion d'état** : l'état du client (pseudo, salon, socket)
   serait maintenu proprement dans un GenServer plutôt que passé
-  en paramètres de fonction en fonction.
+  en paramètres de fonction.
 
 - **Let it crash** : au lieu de gérer tous les cas d'erreur
   manuellement, on laisserait le processus planter et le
@@ -319,14 +266,14 @@ defp valider_message(msg) do
 end
 ```
 
-### Test
+### Test — Filtrage des messages
 
-| Message envoyé | Résultat |
-|---|---|
-| *(vide)* | `❌ Message vide` |
-| 501 caractères | `❌ Message trop long (max 500 chars)` |
-| `bonjour<monde` | `❌ Message contient des caractères interdits` |
-| `bonjour` | Envoyé normalement ✅ |
+![Capture 2 - Filtrage](screenshots/capture_2.png)
+
+**Ce qui est prouvé :**
+- Message vide → `❌ Message vide` ✅
+- `bonjour<monde` → `❌ Message contient des caractères interdits` ✅
+- Message normal `hello` → `[mahdi] hello` ✅
 
 ---
 
@@ -337,10 +284,11 @@ end
 Le serveur et les clients partagent la même clé AES-256 :
 
 ```elixir
-@cle "miniDiscordKey2025_SecretKey32!!"  # 32 bytes
+# Clé partagée de 32 bytes — comme demandé dans le TP
+@cle "miniDiscordKey2025_SecretKey32!!"
 ```
 
-### Chiffrement côté client (`send_loop`)
+### Chiffrement côté client
 
 ```elixir
 iv = :crypto.strong_rand_bytes(16)
@@ -349,7 +297,7 @@ encoded = Base.encode64(iv <> msg_c)
 :gen_tcp.send(socket, encoded <> "\r\n")
 ```
 
-### Déchiffrement côté serveur (`client_handler.ex`)
+### Déchiffrement côté serveur
 
 ```elixir
 defp dechiffrer(data) do
@@ -366,53 +314,50 @@ end
 ### Flux de communication
 
 ```
-Client tape "bonjour"
+Client tape "hello"
 → iv = :crypto.strong_rand_bytes(16)
-→ msg_c = AES256_encrypt("bonjour", @cle, iv)
-→ envoie Base64(iv <> msg_c) sur le réseau  ← chiffré ✅
+→ msg_c = AES256_encrypt("hello", @cle, iv)
+→ envoie Base64(iv <> msg_c) ← chiffré sur le réseau ✅
 
 Serveur reçoit Base64(iv <> msg_c)
 → décode Base64
 → extrait iv (16 premiers bytes)
-→ msg = AES256_decrypt(msg_c, @cle, iv) = "bonjour" ✅
-→ broadcast "[mahdi] bonjour" aux autres clients ✅
+→ msg = AES256_decrypt(msg_c, @cle, iv) = "hello" ✅
+→ broadcast "[mahdi] hello" aux autres clients ✅
 ```
 
-### Preuve du chiffrement — logs serveur
+### Test — Preuve du chiffrement côté serveur
 
-```
-🔐 Reçu chiffré : YzAzdFNlTC9lN0pSUnIyQ3h2NUJ2Tjh4NEVrPQ0K
-🔓 Déchiffré    : fjhg
+![Capture 4 - Cryptographie](screenshots/capture_4.png)
 
-🔐 Reçu chiffré : TDhlMDl6eVVPYTVwOUVKOUlGSGIwQlNzZU85LytnPT0NCg==
-🔓 Déchiffré    : sdfjhk
+**Ce qui est prouvé :**
+- `🔐 Reçu chiffré : YnJ2QTBNa0gx...` → message chiffré sur le réseau ✅
+- `🔓 Déchiffré : hello` → serveur déchiffre avec la clé partagée ✅
 
-🔐 Reçu chiffré : QVV4dXhMcUdFQUNwOFJubDNKVEs3enRwS1FvPQ0K
-🔓 Déchiffré    : heee
-```
+### Test — Communication entre deux clients
+
+![Capture 5 - Deux clients](screenshots/capture_5.png)
+
+**Ce qui est prouvé :**
+- `mahdi` et `karim` dans le même salon ✅
+- Messages visibles en temps réel des deux côtés ✅
+- Historique affiché au nouveau client ✅
 
 ### Intérêt de la cryptographie
 
-Sans cryptographie, les messages voyagent en clair sur le réseau.
-N'importe qui qui intercepte le tunnel `bore` peut lire les conversations.
-
-Avec AES-256-CTR :
-- Les messages sont **illisibles sur le réseau** ✅
-- Seuls les participants avec la **clé partagée** peuvent déchiffrer ✅
-- AES-256 est le **standard militaire** de chiffrement ✅
+Sans crypto → messages lisibles sur le réseau (bore tunnel).
+Avec AES-256 → messages illisibles sans la clé partagée ✅
 
 ---
 
-## Récapitulatif — Tout ce qui a été implémenté
+## Récapitulatif
 
-| Fonctionnalité | Fichier | Statut |
+| Partie | Fonctionnalité | Statut |
 |---|---|---|
-| Connexion TCP | `client.ex` | ✅ |
-| Handshake pseudo/salon | `client.ex` | ✅ |
-| Receiver loop | `client.ex` | ✅ |
-| Sender loop | `client.ex` | ✅ |
-| Reconnexion automatique (2.1) | `client.ex` | ✅ |
-| Reconnexion depuis réception (2.2) | `client.ex` | ✅ |
-| Robustesse OTP (2.3) | README | ✅ |
-| Filtrage de messages (2.4) | `client.ex` | ✅ |
-| Cryptographie AES-256 (2.5) | `client.ex` + `client_handler.ex` | ✅ |
+| 1 | Connexion TCP + handshake | ✅ |
+| 1 | Receiver loop + Sender loop | ✅ |
+| 2.1 | Reconnexion automatique | ✅ |
+| 2.2 | Reconnexion depuis réception | ✅ |
+| 2.3 | Robustesse OTP (réponse) | ✅ |
+| 2.4 | Filtrage de messages | ✅ |
+| 2.5 | Cryptographie AES-256 | ✅ |
